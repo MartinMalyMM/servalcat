@@ -25,6 +25,13 @@ def correlation(obs, calc):
     if obs.size == 0 or numpy.all(~sel):
         return numpy.nan
     return numpy.corrcoef(obs[sel], calc[sel])[0,1]
+def r_squared(obs, calc):
+    obs_mean = numpy.nanmean(obs)
+    numer = numpy.nansum((obs - calc) ** 2)
+    denom = numpy.nansum((obs - obs_mean) ** 2)
+    if denom == 0:
+        return numpy.nan
+    return 1 - (numer / denom)
 
 def df_from_asu_data(asu_data, label):
     df = pandas.DataFrame(data=asu_data.miller_array.astype(numpy.int32),

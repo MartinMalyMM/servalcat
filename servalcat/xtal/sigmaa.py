@@ -87,6 +87,8 @@ def calc_r_and_cc(hkldata, twin_data=None):
     has_free = "FREE" in hkldata.df
     rlab = "R1" if has_int else "R"
     cclab = "CCI" if has_int else "CCF"
+    rsqlab = "R^2"
+    risqlab = "RI^2" if has_int else None
     olab = "Io" if has_int else "Fo"
     clab = "Ic" if has_int else "Fc"
     stats = hkldata.binned_df["stat"].copy()
@@ -117,12 +119,13 @@ def calc_r_and_cc(hkldata, twin_data=None):
     if "CC*" in stats: # swap the positions
         stats.insert(len(stats.columns)-1, "CC*", stats.pop("CC*"))
     if has_free:
-        for lab in (cclab, rlab):
+        for lab in (cclab, rlab, rsqlab):
             for suf in ("work", "free"):
                 stats[lab+suf] = numpy.nan
     else:
         stats[cclab] = numpy.nan
         stats[rlab] = numpy.nan
+        stats[rsqlab] = numpy.nan
 
     centric_and_selections = hkldata.centric_and_selections["stat"]
     for i_bin, idxes in hkldata.binned("stat"):
@@ -137,13 +140,17 @@ def calc_r_and_cc(hkldata, twin_data=None):
                 stats.loc[i_bin, "n_"+suf] = numpy.sum(numpy.isfinite(obs[idxes2]))
                 stats.loc[i_bin, cclab+suf] = utils.hkl.correlation(obs[idxes2], calc[idxes2])
                 stats.loc[i_bin, rlab+suf] = utils.hkl.r_factor(obs_sqrt[idxes2], calc_sqrt[idxes2])
+                stats.loc[i_bin, rsqlab+suf] = utils.hkl.r_squared(obs_sqrt[idxes2], calc_sqrt[idxes2])
                 if rlab == "R1":
                     stats.loc[i_bin, "n_"+rlab+suf] = numpy.sum(numpy.isfinite(obs_sqrt[idxes2]))
+                    stats.loc[i_bin, risqlab+suf] = utils.hkl.r_squared(obs[idxes2], calc[idxes2])
         else:
             stats.loc[i_bin, cclab] = utils.hkl.correlation(obs[idxes], calc[idxes])
             stats.loc[i_bin, rlab] = utils.hkl.r_factor(obs_sqrt[idxes], calc_sqrt[idxes])
+            stats.loc[i_bin, rsqlab] = utils.hkl.r_squared(obs_sqrt[idxes], calc_sqrt[idxes])
             if rlab == "R1":
                 stats.loc[i_bin, "n_"+rlab] = numpy.sum(numpy.isfinite(obs_sqrt[idxes]))
+                stats.loc[i_bin, risqlab] = utils.hkl.r_squared(obs[idxes], calc[idxes])
 
     # Overall
     ret = {}
@@ -153,10 +160,16 @@ def calc_r_and_cc(hkldata, twin_data=None):
         for j, suf in ((1, "work"), (2, "free")):
             idxes = numpy.concatenate([sel[j] for i_bin, _ in hkldata.binned("stat") for sel in centric_and_selections[i_bin]])
             ret[rlab+suf] = utils.hkl.r_factor(obs_sqrt[idxes], calc_sqrt[idxes])
+            ret[rsqlab+suf] = utils.hkl.r_squared(obs_sqrt[idxes], calc_sqrt[idxes])
+            if has_int:
+                ret[risqlab+suf] = utils.hkl.r_squared(obs[idxes], calc[idxes])
     else:
         ret[cclab+"avg"] = nanaverage(stats[cclab], stats["n_obs"])
         ret[rlab] = utils.hkl.r_factor(obs_sqrt, calc_sqrt)
-        
+        ret[rsqlab] = utils.hkl.r_squared(obs_sqrt, calc_sqrt)
+        if has_int:
+            ret[risqlab] = utils.hkl.r_squared(obs, calc)
+
     return stats, ret
 # calc_r_and_cc()
 
@@ -475,8 +488,10 @@ class LsqScale:
         if self.use_int: calc *= calc
         self.stats["cc"] = utils.hkl.correlation(self.obs, calc)
         self.stats["r"] = utils.hkl.r_factor(self.obs, calc)
+        self.stats["r^2"] = utils.hkl.r_squared(self.obs, calc)
         logger.writeln(" CC{} = {:.4f}".format(self.labcut, self.stats["cc"]))
         logger.writeln(" R{}  = {:.4f}".format(self.labcut, self.stats["r"]))
+        logger.writeln(" R^2{} = {:.4f}".format(self.labcut, self.stats["r^2"]))
 # class LsqScale
 
 def calc_abs_DFc(Ds, Fcs):
